@@ -1,0 +1,22 @@
+
+expressroute_service_provider  = "NTT Global DataCenters EMEA"
+expressroute_peering_location  = "Amsterdam2"
+expressroute_bandwidth_in_mbps = 50
+
+/*
+In case the circuit is already provisioned and is not managed via terraform, provide the circuit_id here. 
+This will prevent the creation of the circuit via terraform.
+*/
+#expressroute_circuit_id = ""
+
+/*
+Change to true once the ExpressRoute circuit is provisioned, to continue with the provisioning of the ExpressRoute required connections.
+*/
+expressroute_circuit_provisioned = false
+
+#expressroute_bgp_asn_number = 65515
+#expressroute_bgp_peering_address = "10.80.0.62"
+#expressroute_bgp_peer_weight = null
+
+#custom_circuit_name       = ""
+#custom_vgw_name_expressroute = ""

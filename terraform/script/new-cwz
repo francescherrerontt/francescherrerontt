@@ -1,0 +1,77 @@
+#!/bin/bash
+
+TPLDIR="$(cd cwz.tpl ; pwd -P)"
+
+[[ -d ${TPLDIR} ]] || { echo "Template directory ${TPLDIR} doesn't exist"; exit 1; }
+
+usage() {
+	echo "Usage: $0 landing-name resourcegroup-name"
+	exit 1;
+}
+
+[[ $# -ne 2 ]] && usage;
+
+create_landing() {
+	local ZONE=$1
+	local DIR=landing-${ZONE}
+	local RG=$2
+
+	if [[ -d ${DIR} ]]; then
+		echo "Landing zone directory ${DIR} already exists. Skipping creation."
+		return
+	fi
+
+	cp -a ${TPLDIR} ${DIR}
+
+	# We don't want to drag the rg.tpl directory along. It will be created separately
+	# from the cwz.tpl original directory in create_rg().
+	rm -rf ${DIR}/rg.tpl
+
+	# "template" substitutions
+	sed -i.bak "s/#CWZ#/${ZONE}/g" ${DIR}/* && rm ${DIR}/*.bak
+	sed -i.bak "s/#RG#/${RG}/g" ${DIR}/* && rm ${DIR}/*.bak
+
+	echo "Created landing zone directory: ${DIR}"
+}
+
+create_rg() {
+	local ZONE=$1
+	local DIR=landing-${ZONE}
+	local RG=$2
+	local RGDIR=${DIR}/rg-${RG}
+
+	if [[ -d ${RGDIR} ]]; then
+		echo "RG directory ${RGDIR} already exists. Skipping creation."
+		return
+	fi
+
+	cp -a ${TPLDIR}/rg.tpl ${RGDIR}
+
+	for FILE in $(find ${RGDIR} -name "*.tfvars" -o -name "*.tf") ; do
+		sed -i.bak "s/#CWZ#/${ZONE}/g" $FILE && rm ${FILE}.bak
+		sed -i.bak "s/#RG#/${RG}/g" $FILE && rm ${FILE}.bak
+	done
+
+	echo "Created Resource Group directory: ${RGDIR}"
+
+	echo "Modifying CI/CD sample"
+	for FILE in $(find ${RGDIR} -name .gitlab-ci.jobs.yml) ; do
+		sed -i.bak "s/#CWZ#/${ZONE}/g" $FILE && rm ${FILE}.bak
+		sed -i.bak "s/#RG#/${RG}/g" $FILE && rm ${FILE}.bak
+	done
+
+	echo "Adding environment into pipeline"
+	sed -i.bak "s/include:/include:\n  - terraform\/${DIR}\/rg-${RG}\/.gitlab-ci.jobs.yml/g" ../.gitlab-ci.env.yml && \
+		rm ../.gitlab-ci.env.yml.bak
+
+}
+
+
+ZONE=$1
+RG=$2
+
+echo "Landing: ${ZONE}"
+echo "Resource Group: ${RG}"
+
+create_landing ${ZONE} ${RG}
+create_rg ${ZONE} ${RG}

@@ -1,0 +1,70 @@
+---
+
+init-landing-csz-csz:
+  stage: init-landing-level2
+  extends: .init-landing
+  variables:
+    MAKE_SUFFIX: csz-rg-csz
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - terraform/landing-csz/rg-csz/**/*
+    - if: '$CI_COMMIT_BRANCH  == "master"'
+      changes:
+        - terraform/landing-csz/rg-csz/**/*
+
+validate-landing-csz-csz:
+  stage: validate-landing-level2
+  extends: .validate-landing
+  dependencies:
+    - init-landing-csz-csz
+  variables:
+    MAKE_SUFFIX: csz-rg-csz
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - terraform/landing-csz/rg-csz/**/*
+
+plan-landing-csz-csz:
+  stage: plan-landing-level2
+  extends: .plan-landing
+  dependencies:
+    - init-landing-csz-csz
+  variables:
+    MAKE_SUFFIX: csz-rg-csz
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - terraform/landing-csz/rg-csz/**/*
+    - if: '$CI_COMMIT_BRANCH  == "master" && $APPROVAL_REQUIRED'
+      changes:
+        - terraform/landing-csz/rg-csz/**/*
+      allow_failure: true
+
+apply-landing-csz-csz:
+  stage: apply-landing-level2
+  extends: .apply-landing
+  dependencies:
+    - init-landing-csz-csz
+  variables:
+    MAKE_SUFFIX: csz-rg-csz
+  rules:
+    - if: '$CI_COMMIT_BRANCH  == "master" && $APPROVAL_REQUIRED'
+      changes:
+        - terraform/landing-csz/rg-csz/**/*
+      when: manual
+    - if: '$CI_COMMIT_BRANCH  == "master"'
+      changes:
+        - terraform/landing-csz/rg-csz/**/*
+
+output-landing-csz-csz:
+  stage: output-landing-level2
+  extends: .output-landing
+  dependencies:
+    - init-landing-csz-csz
+  variables:
+    MAKE_SUFFIX: csz-rg-csz
+  rules:
+    - if: '$CI_COMMIT_BRANCH  == "master"'
+      changes:
+        - terraform/landing-csz/rg-csz/**/*

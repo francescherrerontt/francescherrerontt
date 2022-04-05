@@ -1,0 +1,164 @@
+stages:
+  - format
+  - init
+  - common
+  - plan
+  - apply
+  - destroy
+
+variables:
+  ECR: 144127699237.dkr.ecr.eu-west-1.amazonaws.com
+  IMAGE: $ECR/ops/ntt-terraform-test
+  TF_ROOT: terraform
+
+image: "$IMAGE:1.0.1"
+
+
+.load-sshkey: &load-sshkey
+  ## Add the SSH private key GITLAB_DEPLOY_KEY to access other projects
+  - eval $(ssh-agent -s)
+  - ssh-add <(echo "$TERRAFORM_PIPELINES_KEY")
+  ## Create the SSH directory and give it the right permissions
+  - mkdir -p ~/.ssh
+  - chmod 700 ~/.ssh
+  - ssh-keyscan scm.capside.com >> ~/.ssh/known_hosts
+  - chmod 644 ~/.ssh/known_hosts
+
+# prepare test environment with all necessary steps
+.prepare-test-env: &prepare-test-env
+  - source terraform/build.env
+  - echo "Generate default SSH key-pair for compute module"
+  - ssh-keygen -t rsa -N "" -f ~/.ssh/id_rsa
+  - echo "Configure Terrraform automation flag"
+  - export TF_IN_AUTOMATION=1
+  - echo "Configure -auto-approve flags for terraform deployments"
+  - export TF_CLI_ARGS_apply=-auto-approve
+  - export TF_CLI_ARGS_destroy=-auto-approve
+  - export TF_DATA_DIR=terraform/.terraform-data
+  - rm terraform/landing-csz/local-rg-tfstates/fail.tf
+  - rm -Rf terraform/landing-csz/rg-csz/90-virtual_wan_connection
+  - rm -Rf terraform/cwz.tpl/rg.tpl/90-virtual_wan_connection
+
+
+check-format:
+  stage: format
+  script:
+    - cd ${TF_ROOT}
+    - make tf-fmt-check
+
+prepare-test:
+  stage: init
+  artifacts:
+    expire_in: 2 hrs
+    paths:
+      - terraform/landing-csz
+      - terraform/landing-test
+      - terraform/build.env
+      - terraform/backend.tfvars
+  script:
+    - echo "BUILD_VERSION=$CI_COMMIT_SHORT_SHA$((RANDOM % 100))" > terraform/build.env
+    - find ./terraform/cwz.tpl/rg.tpl/ -maxdepth 1 -mindepth 1 -type d -name "*.disabled" | while read f; do mv "$f" "${f%%.disabled}"; done
+    - find ./terraform/landing* -maxdepth 2 -mindepth 2 -type d -name '*.disabled' | while read f; do mv "$f" "${f%%.disabled}"; done
+    - *prepare-test-env
+    - cd ${TF_ROOT}
+    - make cwz-test_$BUILD_VERSION
+    - sed -i "/TF_PLUGIN_CACHE_DIR/d" Makefile.landing.mk
+    - sed -i "s/var.ntt_naming_convention.*/\"rg-pro-csz-$BUILD_VERSION\"/" landing-csz/rg-csz/00-shared_services/00-main.tf
+    - sed -i "s/recovery_vault_name.*/recovery_vault_name = \"testing-rv-$BUILD_VERSION\"/" landing-csz/rg-csz/00-shared_services/00-recoveryvault.tf
+    - sed -i "s/rg-tfstates/rg-tfstates-$BUILD_VERSION/" landing-csz/local-rg-tfstates/05-general.auto.tfvars
+    - sed -ie '/vnet_csz/,/^[}$]./ d' landing-test/rg-$BUILD_VERSION/01-virtual_network/attachments.tf
+    - sed -i 's/vm_backup_policy_id  = .*/&\n  enable_vm_backup=false/' landing-test/rg-$BUILD_VERSION/10-virtual_machine/00-modules.tf
+    - sed -i 's/soft_delete_enabled\s*=.*/soft_delete_enabled = false/'  landing-csz/rg-csz/00-shared_services/00-recoveryvault.tf
+    - sed -i 's/soft_delete_enabled\s*=.*/soft_delete_enabled = false/'  landing-psz/rg-psz/00-shared_services/00-recoveryvault.tf
+    - sed -i 's/soft_delete_enabled\s*=.*/soft_delete_enabled = false/'  landing-test/rg-$BUILD_VERSION/00-shared_services/00-recoveryvault.tf
+    - sed -i "s/sqlserver01skel/sql01$BUILD_VERSION/"  landing-test/rg-$BUILD_VERSION/35-sql_server/05-general.auto.tfvars
+    - sed -i "s/sqlserver02skel/sql02$BUILD_VERSION/"  landing-test/rg-$BUILD_VERSION/35-sql_server/05-general.auto.tfvars
+    - sed -i "s/demomssqldb01/db1$BUILD_VERSION/"  landing-test/rg-$BUILD_VERSION/35-sql_server/05-general.auto.tfvars
+    - sed -i "s/demomssqldb02/db2$BUILD_VERSION/"  landing-test/rg-$BUILD_VERSION/35-sql_server/05-general.auto.tfvars
+    - mv landing-test/rg-$BUILD_VERSION/01-virtual_network/00-peerings.tf landing-test/rg-$BUILD_VERSION/01-virtual_network/00-peerings.tf.disabled
+    - echo "SQL tests are disabled"
+    - mv landing-test/rg-$BUILD_VERSION/35-sql_server  landing-test/rg-$BUILD_VERSION/35-sql_server.disabled
+    - echo "Remove explicit fail.tf to enable terraform operations"
+  only:
+    - merge_requests
+
+apply-common:
+  stage: common
+  artifacts:
+    when: always
+    expire_in: 2 hrs
+    paths:
+      - terraform/landing-csz
+      - terraform/landing-test
+      - terraform/build.env
+      - terraform/backend.tfvars
+  script:
+    - *load-sshkey
+    - *prepare-test-env
+    - cd ${TF_ROOT}
+    - make bootstrap SUBSCRIPTION_ID=$ARM_SUBSCRIPTION_ID
+    - make tf-init-csz-rg-csz SUBSCRIPTION_ID=$ARM_SUBSCRIPTION_ID
+    - export CSZ_DIR=landing-csz/rg-csz
+    - terraform -chdir=$CSZ_DIR/00-shared_services apply -var-file $PWD/backend.tfvars -var-file $PWD/$CSZ_DIR/group.tfvars
+    - make tf-init-test-rg-$BUILD_VERSION SUBSCRIPTION_ID=$ARM_SUBSCRIPTION_ID
+    - export CWZ_DIR=landing-test/rg-$BUILD_VERSION
+    - terraform -chdir=$CWZ_DIR/00-shared_services apply -var-file $PWD/backend.tfvars -var-file $PWD/$CWZ_DIR/group.tfvars -var-file $PWD/$CWZ_DIR/../landing.tfvars
+    - terraform -chdir=$CWZ_DIR/01-virtual_network apply -var-file $PWD/backend.tfvars -var-file $PWD/$CWZ_DIR/group.tfvars -var-file $PWD/$CWZ_DIR/../landing.tfvars
+  only:
+    - merge_requests
+
+plan-landing-cwz:
+  stage: plan
+  artifacts:
+    when: always
+    expire_in: 2 hrs
+    paths:
+      - terraform/landing-csz
+      - terraform/landing-test
+      - terraform/build.env
+      - terraform/backend.tfvars
+  script:
+    - *prepare-test-env
+    - cd ${TF_ROOT}
+    - make tf-init-test-rg-$BUILD_VERSION SUBSCRIPTION_ID=$ARM_SUBSCRIPTION_ID
+    - make tf-plan-test-rg-$BUILD_VERSION SUBSCRIPTION_ID=$ARM_SUBSCRIPTION_ID
+  only:
+    - merge_requests
+
+apply-landing-cwz:
+  stage: apply
+  artifacts:
+    when: always
+    expire_in: 2 hrs
+    paths:
+      - terraform/landing-csz
+      - terraform/landing-test
+      - terraform/build.env
+      - terraform/backend.tfvars
+  script:
+    - *load-sshkey
+    - *prepare-test-env
+    - cd ${TF_ROOT}
+    - make tf-init-test-rg-$BUILD_VERSION SUBSCRIPTION_ID=$ARM_SUBSCRIPTION_ID
+    - make tf-apply-test-rg-$BUILD_VERSION SUBSCRIPTION_ID=$ARM_SUBSCRIPTION_ID
+  only:
+    - merge_requests
+
+destroy-landing-cwz:
+  stage: destroy
+  script:
+    - *load-sshkey
+    - *prepare-test-env
+    - cd ${TF_ROOT}
+    - - sed -i 's/|| exit 1//' Makefile.landing.mk
+    - make cwz-test_$BUILD_VERSION
+    - make tf-init-test-rg-$BUILD_VERSION SUBSCRIPTION_ID=$ARM_SUBSCRIPTION_ID
+    - make tf-destroy-test-rg-$BUILD_VERSION SUBSCRIPTION_ID=$ARM_SUBSCRIPTION_ID
+    - export CSZ_DIR=landing-csz/rg-csz
+    - terraform -chdir=$CSZ_DIR/00-shared_services init -var-file $PWD/backend.tfvars -var-file $PWD/$CSZ_DIR/group.tfvars
+    - terraform -chdir=$CSZ_DIR/00-shared_services destroy -var-file $PWD/backend.tfvars -var-file $PWD/$CSZ_DIR/group.tfvars
+    - make bootstrap SUBSCRIPTION_ID=$ARM_SUBSCRIPTION_ID
+    - make destroy-bootstrap SUBSCRIPTION_ID=$ARM_SUBSCRIPTION_ID
+  when: always
+  only:
+    - merge_requests

@@ -1,0 +1,15 @@
+---
+- hosts: windows
+  tasks:
+  - name: Apply Windows updates
+    win_updates:
+      category_names:
+        - SecurityUpdates
+        - CriticalUpdates
+        - UpdateRollups
+        - Microsoft Defender Antivirus
+        - Windows Server 2019
+        - Updates
+        - Definition Updates
+      state: installed
+      log_path: C:\windows\temp\ansible_wu.txt

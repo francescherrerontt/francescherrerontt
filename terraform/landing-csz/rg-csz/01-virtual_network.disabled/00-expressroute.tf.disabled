@@ -1,0 +1,120 @@
+variable "custom_circuit_name" {
+  description = "Custom name for the express route circuit"
+  type        = string
+  default     = null
+}
+variable "custom_vgw_name_expressroute" {
+  description = "Custom name for the ExpressRoute Virtual Network Gateway"
+  type        = string
+  default     = null
+}
+variable "expressroute_service_provider" {
+  description = "The name of the ExpressRoute Service Provider."
+  type        = string
+  default     = null
+}
+
+variable "expressroute_peering_location" {
+  description = "The name of the peering location and not the Azure resource location."
+  type        = string
+  default     = null
+}
+
+variable "expressroute_bandwidth_in_mbps" {
+  description = "The name of the peering location and not the Azure resource location."
+  type        = number
+  default     = 50
+}
+
+variable "expressroute_circuit_provisioned" {
+  description = "Whether the ExpressRoute circuit is provisioned or not. Change to true when the circuit is provisioned, to continue with the ExpressRoute connection creation."
+  type        = bool
+  default     = false
+}
+
+variable "expressroute_circuit_id" {
+  description = "In case the circuit creation is not managed via Terraform, it allows you to provide an existing circuit id. Circuit id is expected to be in the 'Provisioned' state."
+  type        = string
+  default     = ""
+}
+
+variable "expressroute_enable_bgp" {
+  description = "Enables/Disables BGP on the ExpressRoute Virtual Network Gateway"
+  type        = bool
+  default     = false
+}
+
+variable "expressroute_bgp_asn_number" {
+  description = "The Autonomous System Number (ASN) to use as part of the BGP on the ExpressRoute virtual network gateway"
+  type        = number
+  default     = 65515
+}
+
+variable "expressroute_bgp_peering_address" {
+  description = "The BGP peer IP address of the ExpressRoute virtual network gateway. This address is needed to configure the created gateway as a BGP Peer on the on-premises VPN devices. The IP address must be part of the subnet of the Virtual Network Gateway."
+  type        = string
+  default     = null
+}
+
+variable "expressroute_bgp_peer_weight" {
+  description = "The weight added to routes which have been learned through BGP peering on the ExpressRoute virtual network gateway. Valid values can be between 0 and 100"
+  type        = number
+  default     = null
+}
+
+resource "azurerm_express_route_circuit" "expressroute" {
+  count                 = var.expressroute_circuit_id == "" ? 1 : 0
+  name                  = var.ntt_naming_convention ? lower(format("cir-%s-%s", var.ntt_environment, substr(var.ntt_service_group, 0, 69))) : var.custom_circuit_name
+  resource_group_name   = data.terraform_remote_state.global_rg.outputs.resource_group_name
+  location              = var.location != "" ? var.location : data.terraform_remote_state.global_rg.outputs.resource_group_location
+  service_provider_name = var.expressroute_service_provider
+  peering_location      = var.expressroute_peering_location
+  bandwidth_in_mbps     = var.expressroute_bandwidth_in_mbps
+
+  sku {
+    tier   = "Standard"
+    family = "MeteredData"
+  }
+
+  tags = merge(
+    local.common_tags,
+    var.resource_tags
+  )
+}
+
+module "expressroute" {
+  source = "git::git@scm.capside.com:terraform/azure/terraform-azurerm-virtual-network-gateway.git?ref=ntt/1.0.3"
+
+  resource_group_name              = data.terraform_remote_state.global_rg.outputs.resource_group_name
+  virtual_network_name             = module.vnet-prod.vnet_name
+  vpn_gateway_name                 = var.ntt_naming_convention ? lower(format("vgw-%s-%s-expressroute", var.ntt_environment, substr(var.ntt_service_group, 0, 56))) : var.custom_vgw_name_expressroute
+  location                         = var.location != "" ? var.location : data.terraform_remote_state.global_rg.outputs.resource_group_location
+  gateway_type                     = "ExpressRoute"
+  expressroute_circuit_provisioned = var.expressroute_circuit_provisioned
+  expressroute_circuit_id          = var.expressroute_circuit_id != "" ? var.expressroute_circuit_id : azurerm_express_route_circuit.expressroute[0].id
+  enable_bgp                       = var.expressroute_enable_bgp
+  bgp_asn_number                   = var.expressroute_bgp_asn_number
+  bgp_peering_address              = var.expressroute_bgp_peering_address
+  bgp_peer_weight                  = var.expressroute_bgp_peer_weight
+
+  tags = merge(
+    local.common_tags,
+    var.resource_tags
+  )
+  depends_on = [module.vnet-prod.vnet_name]
+}
+
+output "expressroute_vgw_public_ip" {
+  description = "The public IP of the virtual network gateway"
+  value       = module.expressroute.vgw_public_ip
+}
+
+output "expressroute_vgw_public_ip_fqdn" {
+  description = "Fully qualified domain name of the virtual network gateway"
+  value       = module.expressroute.vgw_public_ip_fqdn
+}
+
+output "expressroute_circuit_service_key" {
+  description = "The string needed by the service provider to provision the ExpressRoute circuit."
+  value       = var.expressroute_circuit_id == "" ? azurerm_express_route_circuit.expressroute[0].service_key : null
+}

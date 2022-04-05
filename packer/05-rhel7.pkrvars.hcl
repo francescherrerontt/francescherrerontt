@@ -1,0 +1,6 @@
+gallery_name = "sigb391a018d0770053"
+location = "westeurope"
+vm_group ="rhel7"
+image_offer = "RHEL"
+image_publisher = "RedHat"
+image_sku= "77-gen2"

@@ -1,0 +1,70 @@
+---
+
+init-landing-csz-virtual_wan:
+  stage: init-landing-level1
+  extends: .init-landing
+  variables:
+    MAKE_SUFFIX: csz-rg-virtual_wan
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - terraform/landing-csz/rg-virtual_wan/**/*
+    - if: '$CI_COMMIT_BRANCH  == "master"'
+      changes:
+        - terraform/landing-csz/rg-virtual_wan/**/*
+
+validate-landing-csz-virtual_wan:
+  stage: validate-landing-level1
+  extends: .validate-landing
+  dependencies:
+    - init-landing-csz-virtual_wan
+  variables:
+    MAKE_SUFFIX: csz-rg-virtual_wan
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - terraform/landing-csz/rg-virtual_wan/**/*
+
+plan-landing-csz-virtual_wan:
+  stage: plan-landing-level1
+  extends: .plan-landing
+  dependencies:
+    - init-landing-csz-virtual_wan
+  variables:
+    MAKE_SUFFIX: csz-rg-virtual_wan
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - terraform/landing-csz/rg-virtual_wan/**/*
+    - if: '$CI_COMMIT_BRANCH  == "master" && $APPROVAL_REQUIRED'
+      changes:
+        - terraform/landing-csz/rg-virtual_wan/**/*
+      allow_failure: true
+
+apply-landing-csz-virtual_wan:
+  stage: apply-landing-level1
+  extends: .apply-landing
+  dependencies:
+    - init-landing-csz-virtual_wan
+  variables:
+    MAKE_SUFFIX: csz-rg-virtual_wan
+  rules:
+    - if: '$CI_COMMIT_BRANCH  == "master" && $APPROVAL_REQUIRED'
+      changes:
+        - terraform/landing-csz/rg-virtual_wan/**/*
+      when: manual
+    - if: '$CI_COMMIT_BRANCH  == "master"'
+      changes:
+        - terraform/landing-csz/rg-virtual_wan/**/*
+
+output-landing-csz-virtual_wan:
+  stage: output-landing-level1
+  extends: .output-landing
+  dependencies:
+    - init-landing-csz-virtual_wan
+  variables:
+    MAKE_SUFFIX: csz-rg-virtual_wan
+  rules:
+    - if: '$CI_COMMIT_BRANCH  == "master"'
+      changes:
+        - terraform/landing-csz/rg-virtual_wan/**/*

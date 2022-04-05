@@ -1,0 +1,6 @@
+gallery_name = "sigb391a018d0770053"
+location = "westeurope"
+vm_group ="ubuntu18"
+image_offer = "UbuntuServer"
+image_publisher = "Canonical"
+image_sku= "18_04-lts-gen2"

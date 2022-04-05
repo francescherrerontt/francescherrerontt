@@ -1,0 +1,70 @@
+---
+
+init-landing-#CWZ#-#RG#:
+  stage: init-landings
+  extends: .init-landing
+  variables:
+    MAKE_SUFFIX: "#CWZ#-rg-#RG#"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - terraform/landing-#CWZ#/rg-#RG#/**/*
+    - if: '$CI_COMMIT_BRANCH  == "master"'
+      changes:
+        - terraform/landing-#CWZ#/rg-#RG#/**/*
+
+validate-landing-#CWZ#-#RG#:
+  stage: validate-landings
+  extends: .validate-landing
+  dependencies:
+    - init-landing-#CWZ#-#RG#
+  variables:
+    MAKE_SUFFIX: "#CWZ#-rg-#RG#"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - terraform/landing-#CWZ#/rg-#RG#/**/*
+
+plan-landing-#CWZ#-#RG#:
+  stage: plan-landings
+  extends: .plan-landing
+  dependencies:
+    - init-landing-#CWZ#-#RG#
+  variables:
+    MAKE_SUFFIX: "#CWZ#-rg-#RG#"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - terraform/landing-#CWZ#/rg-#RG#/**/*
+    - if: '$CI_COMMIT_BRANCH  == "master" && $APPROVAL_REQUIRED'
+      changes:
+        - terraform/landing-#CWZ#/rg-#RG#/**/*
+      allow_failure: true
+
+apply-landing-#CWZ#-#RG#:
+  stage: apply-landings
+  extends: .apply-landing
+  dependencies:
+    - init-landing-#CWZ#-#RG#
+  variables:
+    MAKE_SUFFIX: "#CWZ#-rg-#RG#"
+  rules:
+    - if: '$CI_COMMIT_BRANCH  == "master" && $APPROVAL_REQUIRED'
+      changes:
+        - terraform/landing-#CWZ#/rg-#RG#/**/*
+      when: manual
+    - if: '$CI_COMMIT_BRANCH  == "master"'
+      changes:
+        - terraform/landing-#CWZ#/rg-#RG#/**/*
+
+output-landing-#CWZ#-#RG#:
+  stage: output-landings
+  extends: .output-landing
+  dependencies:
+    - init-landing-#CWZ#-#RG#
+  variables:
+    MAKE_SUFFIX: "#CWZ#-rg-#RG#"
+  rules:
+    - if: '$CI_COMMIT_BRANCH  == "master"'
+      changes:
+        - terraform/landing-#CWZ#/rg-#RG#/**/*

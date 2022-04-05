@@ -1,0 +1,180 @@
+---
+
+variables:
+  ECR: 144127699237.dkr.ecr.eu-west-1.amazonaws.com
+  IMAGE: $ECR/ops/ntt-terraform-test
+  TF_ROOT: ${CI_PROJECT_DIR}/terraform
+  TF_PLUGIN_CACHE_DIR: ${CI_PROJECT_DIR}/.terraform.d/plugin-cache
+  TF_IN_AUTOMATION: 1
+  TF_CLI_ARGS_apply: -auto-approve
+
+image: "$IMAGE:1.0.1"
+
+stages:
+  - format
+  - init-landing-level1
+  - validate-landing-level1
+  - plan-landing-level1
+  - apply-landing-level1
+  - output-landing-level1
+  - init-landing-level2
+  - validate-landing-level2
+  - plan-landing-level2
+  - apply-landing-level2
+  - output-landing-level2
+  - init-landings
+  - validate-landings
+  - plan-landings
+  - apply-landings
+  - output-landings
+  - validate-packer
+  - apply-packer
+
+
+cache: &global_cache
+  # We generate a unique name that works for branches and pull requests.
+  # However, we avoid the cache of a pull request to affect master for security
+  key: "${CI_MERGE_REQUEST_IID}${CI_COMMIT_BRANCH}"
+  paths:
+    - "${TF_PLUGIN_CACHE_DIR}"
+  # By default, we only pull the cache
+  policy: pull
+
+# Includes
+# -----------------------
+
+# Link to yaml file including the environments to execute via pipeline
+include:
+  - .gitlab-ci.env.yml
+
+# Prep functions
+# -----------------------
+
+# Generates ssh key for module download
+.load-sshkey: &load-sshkey
+  ## Add the SSH private key GITLAB_DEPLOY_KEY to access other projects
+  - echo "Add key into known hosts"
+  - eval $(ssh-agent -s)
+  - ssh-add <(echo "$TERRAFORM_PIPELINES_KEY")
+  ## Create the SSH directory and give it the right permissions
+  - mkdir -p ~/.ssh
+  - chmod 700 ~/.ssh
+  - ssh-keyscan scm.capside.com >> ~/.ssh/known_hosts
+  - chmod 644 ~/.ssh/known_hosts
+
+# prepare test environment with all necessary steps
+.prepare-deployment: &prepare-deployment
+  - cd ${TF_ROOT}
+  - echo "Generate default SSH key-pair for compute module"
+  - ssh-keygen -t rsa -N "" -f ~/.ssh/id_rsa
+  - ls -lrta ~/.ssh/
+
+
+# Fixes cache plugin path
+.fix-cache-plugin-path: &fix-cache-plugin-path
+  - cd ${TF_ROOT}
+  - sed -i "/export TF_PLUGIN_CACHE_DIR/d" Makefile
+  - sed -i "/export TF_PLUGIN_CACHE_DIR/d" Makefile.landing.mk
+
+# Execute always
+# -----------------------
+
+before_script:
+  - terraform --version
+
+# TF build functions
+# -----------------------
+
+# This one executes either from merge requests or from a merge in master
+.init-landing:
+  artifacts:
+    expire_in: 8 hrs
+    paths:
+      - "${TF_ROOT}"
+  # We avoid multiple parallel executions on the same landing
+  resource_group: ${MAKE_SUFFIX}
+  script:
+    - *load-sshkey
+    - *fix-cache-plugin-path
+    - make tf-init-${MAKE_SUFFIX}
+  cache:
+    <<: *global_cache
+    # We only upload a new cache after an init
+    policy: pull-push
+
+.validate-landing:
+  artifacts:
+    expire_in: 8 hrs
+    paths:
+      - "${TF_ROOT}"
+  # We avoid multiple parallel executions on the same landing
+  resource_group: ${MAKE_SUFFIX}
+  script:
+    - cd ${TF_ROOT}
+    - make tf-validate-${MAKE_SUFFIX}
+
+.plan-landing:
+  artifacts:
+    expire_in: 8 hrs
+    paths:
+      - "${TF_ROOT}"
+  # We avoid multiple parallel executions on the same landing
+  resource_group: ${MAKE_SUFFIX}
+  script:
+    - cd ${TF_ROOT}
+    - make tf-plan-${MAKE_SUFFIX}
+
+.apply-landing:
+  artifacts:
+    expire_in: 8 hrs
+    paths:
+      - "${TF_ROOT}"
+  script:
+    - *prepare-deployment
+    - make tf-apply-${MAKE_SUFFIX}
+
+.output-landing:
+  # We avoid multiple parallel executions on the same landing
+  resource_group: ${MAKE_SUFFIX}
+  script:
+    - cd ${TF_ROOT}
+    - make tf-output-${MAKE_SUFFIX}
+
+# Packer build functions
+# -----------------------
+
+.validate-packer:
+  artifacts:
+    expire_in: 8 hrs
+    paths:
+      - terraform/
+  script:
+    - *load-sshkey
+    - cd ${TF_ROOT}
+    - echo "Validate packer image!!"
+
+.apply-packer:
+  script:
+    - *load-sshkey
+    - cd ${TF_ROOT}
+    - echo "Packer applied!"
+    - echo "packer build  -var-file=w19.pkrvars.hcl -var-file=secretitos.pkrvars.hcl windows.pkr.hcl"
+  resource_group: packer
+
+# General jobs
+# -----------------------
+
+check-format:
+  stage: format
+  script:
+    - *fix-cache-plugin-path
+    - make tf-fmt-check
+  # Cache not required to execute tf-fmt-check
+  cache: {}
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - terraform/**/*
+    - if: '$CI_COMMIT_BRANCH  == "master"'
+      changes:
+        - terraform/**/*

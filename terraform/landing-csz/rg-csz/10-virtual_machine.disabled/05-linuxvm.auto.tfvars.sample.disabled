@@ -1,0 +1,11 @@
+virtual_machines_l = {
+   "frontend02" = {
+      extra_disks = []
+      nb_public_ip = "0"
+      avset_name   = "front-avset" ## use "" if you are not using an avset
+      private_ip_address = null
+      vm_size      = "Standard_D2s_v3"
+      vnet_subnet_name = "snet-commonservices"
+      encryption_at_host_enabled = false
+   },
+}

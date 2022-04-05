@@ -1,0 +1,30 @@
+/*
+The following file contains an example Azure Function that can be launched with the already deployed App Service Plans. Note that it is linked with the App Service Plan ID fetched with the Terraform data source.
+Azure Function resources can be highly configurable, thus can be defined directly as a resource: https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/function_app
+A storage account is needed to upload the Azure Functions code.
+*/
+
+data "azurerm_app_service_plan" "appsPlan" {
+  name                = var.app_service_plans["devPlan"].custom_app_service_plan_name
+  resource_group_name = data.terraform_remote_state.global_rg.outputs.resource_group_name
+  depends_on          = [module.appServicePlans]
+}
+
+resource "azurerm_storage_account" "funcdata" {
+  name                     = "funcapptestnttproduct"
+  location                 = var.location != "" ? var.location : data.terraform_remote_state.global_rg.outputs.resource_group_location
+  resource_group_name      = data.terraform_remote_state.global_rg.outputs.resource_group_name
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+}
+
+resource "azurerm_function_app" "function1" {
+  name                = "test-azure-functions-auto-ntt"
+  location            = var.location != "" ? var.location : data.terraform_remote_state.global_rg.outputs.resource_group_location
+  resource_group_name = data.terraform_remote_state.global_rg.outputs.resource_group_name
+  app_service_plan_id = data.azurerm_app_service_plan.appsPlan.id
+
+  storage_account_name       = azurerm_storage_account.funcdata.name
+  storage_account_access_key = azurerm_storage_account.funcdata.primary_access_key
+  os_type                    = "linux"
+}

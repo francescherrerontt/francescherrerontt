@@ -1,0 +1,71 @@
+variable "custom_vgw_name_vpn" {
+  description = "Custom name for the VPN Virtual Network Gateway"
+  type        = string
+  default     = null
+}
+variable "vpn_connection" {
+  description = "List of vpn connections to create."
+  type        = map(any)
+  default     = {}
+}
+
+variable "vpn_enable_bgp" {
+  description = "Enables/Disables BGP on the VPN Virtual Network Gateway"
+  type        = bool
+  default     = false
+}
+
+variable "vpn_bgp_asn_number" {
+  description = "The Autonomous System Number (ASN) to use as part of the BGP on the VPN virtual network gateway"
+  type        = number
+  default     = 65515
+}
+
+variable "vpn_bgp_peering_address" {
+  description = "The BGP peer IP address of the VPN virtual network gateway. This address is needed to configure the created gateway as a BGP Peer on the on-premises VPN devices. The IP address must be part of the subnet of the Virtual Network Gateway."
+  type        = string
+  default     = null
+}
+
+variable "vpn_bgp_peer_weight" {
+  description = "The weight added to routes which have been learned through BGP peering on the VPN virtual network gateway. Valid values can be between 0 and 100"
+  type        = number
+  default     = null
+}
+module "vpn-gateway" {
+  source = "git::git@scm.capside.com:terraform/azure/terraform-azurerm-virtual-network-gateway.git?ref=ntt/1.0.3"
+
+  resource_group_name         = data.terraform_remote_state.global_rg.outputs.resource_group_name
+  virtual_network_name        = module.vnet-prod.vnet_name
+  vpn_gateway_name            = var.ntt_naming_convention ? lower(format("vgw-%s-%s-vpn", var.ntt_environment, substr(var.ntt_service_group, 0, 65))) : var.custom_vgw_name_vpn
+  location                    = var.location != "" ? var.location : data.terraform_remote_state.global_rg.outputs.resource_group_location
+  gateway_type                = "Vpn"
+  vpn_type                    = "RouteBased"
+  vpn_gw_sku                  = "VpnGw1"
+  vpn_gw_generation           = "Generation1"
+  gateway_connection_protocol = "IKEv2"
+  gateway_connection_type     = "IPSec"
+  enable_bgp                  = var.vpn_enable_bgp
+  bgp_asn_number              = var.vpn_bgp_asn_number
+  bgp_peering_address         = var.vpn_bgp_peering_address
+  bgp_peer_weight             = var.vpn_bgp_peer_weight
+  key_vault_id                = data.terraform_remote_state.global_rg.outputs.keyvault_id
+
+  vpn_connection = var.vpn_connection
+
+  tags = merge(
+    local.common_tags,
+    var.resource_tags
+  )
+
+  depends_on = [module.vnet-prod.vnet_name]
+}
+output "vpn_vgw_public_ip" {
+  description = "The public IP of the virtual network gateway"
+  value       = module.vpn-gateway.vgw_public_ip
+}
+
+output "vpn_vgw_public_ip_fqdn" {
+  description = "Fully qualified domain name of the virtual network gateway"
+  value       = module.vpn-gateway.vgw_public_ip_fqdn
+}
