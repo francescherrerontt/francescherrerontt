@@ -1,0 +1,70 @@
+---
+
+init-landing-az-group-test-01:
+  stage: init-landings
+  extends: .init-landing
+  variables:
+    MAKE_SUFFIX: "az-rg-group-test-01"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - terraform/landing-az/rg-group-test-01/**/*
+    - if: '$CI_COMMIT_BRANCH  == "master"'
+      changes:
+        - terraform/landing-az/rg-group-test-01/**/*
+
+validate-landing-az-group-test-01:
+  stage: validate-landings
+  extends: .validate-landing
+  dependencies:
+    - init-landing-az-group-test-01
+  variables:
+    MAKE_SUFFIX: "az-rg-group-test-01"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - terraform/landing-az/rg-group-test-01/**/*
+
+plan-landing-az-group-test-01:
+  stage: plan-landings
+  extends: .plan-landing
+  dependencies:
+    - init-landing-az-group-test-01
+  variables:
+    MAKE_SUFFIX: "az-rg-group-test-01"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - terraform/landing-az/rg-group-test-01/**/*
+    - if: '$CI_COMMIT_BRANCH  == "master" && $APPROVAL_REQUIRED'
+      changes:
+        - terraform/landing-az/rg-group-test-01/**/*
+      allow_failure: true
+
+apply-landing-az-group-test-01:
+  stage: apply-landings
+  extends: .apply-landing
+  dependencies:
+    - init-landing-az-group-test-01
+  variables:
+    MAKE_SUFFIX: "az-rg-group-test-01"
+  rules:
+    - if: '$CI_COMMIT_BRANCH  == "master" && $APPROVAL_REQUIRED'
+      changes:
+        - terraform/landing-az/rg-group-test-01/**/*
+      when: manual
+    - if: '$CI_COMMIT_BRANCH  == "master"'
+      changes:
+        - terraform/landing-az/rg-group-test-01/**/*
+
+output-landing-az-group-test-01:
+  stage: output-landings
+  extends: .output-landing
+  dependencies:
+    - init-landing-az-group-test-01
+  variables:
+    MAKE_SUFFIX: "az-rg-group-test-01"
+  rules:
+    - if: '$CI_COMMIT_BRANCH  == "master"'
+      changes:
+        - terraform/landing-az/rg-group-test-01/**/*

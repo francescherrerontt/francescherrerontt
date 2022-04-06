@@ -1,0 +1,72 @@
+module "vnet-prod" {
+  source              = "Azure/network/azurerm"
+  resource_group_name = data.terraform_remote_state.hubnetwork01_global.outputs.resource_group_name
+  vnet_name           = var.vnet_name
+
+  dns_servers         = var.dns_servers
+  address_space       = var.address_space
+  subnet_prefixes     = var.subnet_objects[*].prefix
+  subnet_names        = var.subnet_objects[*].name
+
+  tags = var.common_tags
+ 
+  depends_on = [azurerm_resource_group.example]
+}
+
+#routetables supporting virtualAppliance
+module "routetableVA" {
+  source              = "../../../modules/ntt-routetable"
+  for_each            = var.route_tablesVA
+  resource_group_name = data.terraform_remote_state.hubnetwork01_global.outputs.resource_group_name
+  location            = var.location
+  route_table_name    = each.value.route_table_name
+  route_prefixes      = each.value.routes[*].prefix
+  route_nexthop_types = each.value.routes[*].nexthop_type
+  route_names         = each.value.routes[*].name
+  route_nexthop_ips   = each.value.routes[*].nexthop_in_ip_addres
+
+  tags = var.common_tags
+  
+  depends_on = [azurerm_resource_group.example]
+}
+
+# associate each vnet id created with the routetable with virtual appliance  1 to 1 relation
+resource "azurerm_subnet_route_table_association" "rtableVA" {
+  for_each       = var.route_tablesVA
+  route_table_id = module.routetableVA[each.value.route_table_name].routetable_id
+  subnet_id      = module.vnet-prod.vnet_subnets[each.value.subnet_id]
+}
+
+# security groups
+resource "azurerm_network_security_group" "nsg" {
+  depends_on = [azurerm_resource_group.example]
+  for_each            = var.nsg_assoc
+  name                = each.value.nsg_name
+  location            = var.location != "" ? var.location : var.rg_name
+  resource_group_name = data.terraform_remote_state.hubnetwork01_global.outputs.resource_group_name
+  tags                = var.common_tags
+}
+
+resource "azurerm_network_security_rule" "custom_rules" {
+  depends_on = [azurerm_network_security_group.nsg]
+  for_each            = var.nsg
+  name                                       = each.value.name
+  priority                                   = each.value.priority
+  direction                                  = "Inbound"
+  access                                     = "Allow"
+  protocol                                   = each.value.protocol
+  source_port_range                          = each.value.sourceportranges
+  destination_port_ranges                    = each.value.dstport
+  source_address_prefix                      = each.value.srcaddressprefix
+  destination_address_prefixes               = each.value.dstaddressprefix
+  description                                = each.value.description
+  resource_group_name                        = data.terraform_remote_state.hubnetwork01_global.outputs.resource_group_name
+  network_security_group_name                = each.value.nsg_name
+}
+
+# attach nsg to subnet 1 to 1 relationship
+resource "azurerm_subnet_network_security_group_association" "main" {
+  for_each  = var.nsg_assoc
+  subnet_id = module.vnet-prod.vnet_subnets[each.value.subnet_id]
+  network_security_group_id = azurerm_network_security_group.nsg[each.value.nsg_name].id
+}
