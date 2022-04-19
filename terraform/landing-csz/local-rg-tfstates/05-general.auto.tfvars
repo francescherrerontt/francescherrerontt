@@ -1,4 +1,4 @@
-resource_group_name = "rg-tfstates"
+resource_group_name = "rg-tfstates_francesc"
 
 location          = "westeurope"
 ntt_monitoring    = "1"

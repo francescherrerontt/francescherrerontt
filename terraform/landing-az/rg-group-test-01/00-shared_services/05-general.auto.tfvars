@@ -1,4 +1,5 @@
-#custom_rg_name = ""
+custom_rg_name = "test_az_NTT_francesc"
+ntt_naming_convention = false
 #custom_kv_name = ""
 /*resource_tags = {
   service_group = "cwz-ecommerce01"
