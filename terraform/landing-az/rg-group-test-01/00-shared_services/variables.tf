@@ -3,6 +3,21 @@ variable "resource_group_name" {
   description = "Backend storage resource group"
   type        = string
 }
+
+variable "location" {
+  description = "This is the location to deploy resources"
+  type        = string
+  default     = "westeurope"
+}
+
+variable "containers" {
+  type = list(any)
+  description = "Names expected by containers"
+  default = [ "storagelogs", "receivedfiles", "movements", "events" ]  
+}
+
+
+
 variable "storage_account_name" {
   description = "Backend storage account"
   type        = string
@@ -28,12 +43,6 @@ variable "resource_tags" {
   description = "Key/Value of tags to apply to created resources"
   type        = map(any)
   default     = {}
-}
-
-variable "location" {
-  description = "This is the location to deploy resources"
-  type        = string
-  default     = "westeurope"
 }
 
 variable "admin_objects_ids" {

@@ -15,6 +15,12 @@ variable "resource_group_name" {
   default     = "rg-tfstates"
 }
 
+variable "storage_account_name" {
+  description = "This is the storage account name."
+  type = string
+  
+}
+
 variable "ntt_monitoring" {
   description = "Defines wether the resources should be monitored or not. Possible values: 0, 1"
   type        = string

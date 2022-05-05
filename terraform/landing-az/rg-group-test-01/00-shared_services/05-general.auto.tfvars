@@ -1,5 +1,6 @@
 custom_rg_name = "test_az_NTT_francesc"
 ntt_naming_convention = false
+storage_account_name = "test_FH"
 #custom_kv_name = ""
 /*resource_tags = {
   service_group = "cwz-ecommerce01"

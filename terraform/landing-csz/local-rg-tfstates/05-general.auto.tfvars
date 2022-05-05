@@ -1,4 +1,5 @@
 resource_group_name = "rg-tfstates_francesc"
+storage_account_name = "stastprostate22468y220z"
 
 location          = "westeurope"
 ntt_monitoring    = "1"

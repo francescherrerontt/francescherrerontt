@@ -9,10 +9,25 @@ locals {
   }
 }
 resource "azurerm_resource_group" "global" {
-  name     = var.ntt_naming_convention ? lower(format("rg-%s-%s", var.ntt_environment, substr(var.ntt_service_group, 0, 53))) : var.custom_rg_name
+  name     = var.custom_rg_name
   location = var.location
   tags = merge(
     local.common_tags,
     var.resource_tags
   )
+}
+
+resource "azurerm_storage_account" "storage_account" {
+  name    = var.storage_account_name
+  resource_group_name = azurerm_resource_group.global.name
+  location = azurerm_resource_group.global.location
+  account_tier = "Standard"
+  account_replication_type = "GRS"
+}
+
+resource "azurerm_storage_container" "container" {
+  for_each = toset(var.containers)
+  name = each.value
+  storage_account_name = azurerm_storage_account.storage_account.name
+  container_access_type = "private" 
 }
