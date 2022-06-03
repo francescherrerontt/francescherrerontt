@@ -16,8 +16,6 @@ variable "containers" {
   default = [ "storagelogs", "receivedfiles", "movements", "events" ]  
 }
 
-
-
 variable "storage_account_name" {
   description = "Backend storage account"
   type        = string
