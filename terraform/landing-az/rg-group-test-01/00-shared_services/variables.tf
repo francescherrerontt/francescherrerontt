@@ -11,9 +11,9 @@ variable "location" {
 }
 
 variable "containers" {
-  type = list(any)
+  type        = list(any)
   description = "Names expected by containers"
-  default = [ "storagelogs", "receivedfiles", "movements", "events" ]  
+  default     = ["storagelogs", "receivedfiles", "movements", "events"]
 }
 
 variable "storage_account_name" {
